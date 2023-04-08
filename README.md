@@ -1,4 +1,10 @@
-### Hi there 👋
+### 
+How to use
+
+train.py takes password file as input and trains a transformer model. 
+
+transformer_guess.py takes a trained model and test password file as input and generates confident guesses for passwords in the test file. 
+
 
 <!--
 **ConfidentMonteCarlo/ConfidentMonteCarlo** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
