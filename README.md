@@ -1,9 +1,13 @@
-### 
-How to use
+### Full version paper:
+**Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf** is the full version of IEEE S&P 2023 conference paper with missing proofs and complementary figures. 
 
-train.py takes password file as input and trains a transformer model. 
+If you want to cite this paper, please cite the IEEE S&P 2023 conference version.
 
-transformer_guess.py takes a trained model and test password file as input and generates confident guesses for passwords in the test file. 
+### How to use
+
+**train.py** takes password file as input and trains a transformer model. 
+
+**transformer_guess.py** takes a trained model and test password file as input and generates confident guesses for passwords in the test file. 
 
 
 <!--
