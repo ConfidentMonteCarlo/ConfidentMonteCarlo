@@ -1,5 +1,5 @@
 ### Full version paper:
-**Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf** is the full version of IEEE S&P 2023 conference paper with missing proofs and complementary figures. 
+**Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf** is the full version of IEEE S&P 2023 conference paper **Confident monte carlo: Rigorous analysis of guessing curves for probabilistic password models** with missing proofs and complementary figures. 
 
 If you want to cite this paper, please cite the IEEE S&P 2023 conference version.
 
