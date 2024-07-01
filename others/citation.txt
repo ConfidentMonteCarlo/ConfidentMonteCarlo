@@ -1,0 +1,10 @@
+@INPROCEEDINGS{10179365,
+  author={Liu, Peiyuan and Blocki, Jeremiah and Bai, Wenjie},
+  booktitle={2023 IEEE Symposium on Security and Privacy (SP)}, 
+  title={Confident Monte Carlo: Rigorous Analysis of Guessing Curves for Probabilistic Password Models}, 
+  year={2023},
+  volume={},
+  number={},
+  pages={626-644},
+  keywords={Resistance;Data privacy;Analytical models;Monte Carlo methods;Estimation;Passwords;Probabilistic logic;Monte Carlo Estimation;Password Cracking Models;Concentration bounds},
+  doi={10.1109/SP46215.2023.10179365}}

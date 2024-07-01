@@ -1,26 +1,184 @@
-### Full version paper:
-**Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf** is the full version of IEEE S&P 2023 conference paper **Confident monte carlo: Rigorous analysis of guessing curves for probabilistic password models** with missing proofs and complementary figures. 
+# Confident Monte Carlo: Rigorous Statistical Analysis for Probabilistic Password Models
 
-If you want to cite this paper, please cite the IEEE S&P 2023 conference version.
+This is an implementation of the programming interface for the statistical techniques described in [this paper](Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf), which is the full version of IEEE S&P 2023 conference paper **Confident monte carlo: Rigorous analysis of guessing curves for probabilistic password models** with missing proofs and complementary figures.
 
-### How to use
+> If you want to cite this paper, please cite the [IEEE S&P 2023 conference version](https://ieeexplore.ieee.org/document/10179365) ([citation text](others/citation.txt)).
 
-**train.py** takes password file as input and trains a transformer model. 
+Below is an introduction to using the interface. Please also take a look at the [examples](examples) as well as the documentation in the [code](cmc.py) for usage details.
 
-**transformer_guess.py** takes a trained model and test password file as input and generates confident guesses for passwords in the test file. 
+## Background
 
+In addition to their offensive uses, Probabilistic Password Cracking Models have many defensive applications. One defensive application is to use the passsword cracking model to estimate the strength of a user's password during account registration so that we can warn users who attempt to register with a weak password that would be easy for an attacker to guess.
 
-<!--
-**ConfidentMonteCarlo/ConfidentMonteCarlo** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+For our application, we would like to efficiently determine how many guesses an attacker using a password cracking model $M$ would need to check before s/he cracks a particular user's password $pwd$. One way to determine the guessing number of a particular password $pwd$ would simply be to enumerate all possible password guesses, ordered according to their probability under the model $M$, keeping track of the number of incorrect guesses which appear before the correct password $pwd$. However, naive brute-force enumeration is often prohibitively expensive especially when the guessing number is very large e.g., $> 10^{15}$. Dell’Amico and Filippone (CCS 2015) developed an efficient Monte Carlo algorithm to estimate the guessing number of a given password $pwd$. While Dell’Amico and Filippone proved that their estimator is unbiased, there is no guarantee that the estimates are accurate nor does the method provide confidence ranges on the estimated guessing number or even indicate if/when there is a high degree of uncertainty. The Confident Monte Carlo tool extends the Monte Carlo algorithm of Dell’Amico and Filippone with confidence intervals. The tool can be used to generate an upper bound $U$ and a lower bound $L$ for true guessing number $G$ of a password $pwd$. The guarantee is that, except with small error probability $err$, the true guessing number $G$ lies within the interval $[L,U]$.
 
-Here are some ideas to get you started:
+The Confident Monte Carlo tool can also be used to generate lower/upper bounds for an attacker's guessing curve. Specifically, given a model $M$, dataset $D$, and guessing budget $B$, let $\lambda_{M,B,D}$ denote the fraction of passwords in the dataset $D$ that would be cracked within $B$ guessed when the attacker uses model $M$ to generate guesses. The Confident Monte Carlo tool outputs upper (resp. lower) bounds U(B) (resp. L(B)) such that, except with small probability $err$, we have $L(B) \leq \lambda_{M,B,D} \leq U(B)$ for all guessing budgets $B$ i.e., $\Pr[\forall B. L(B) \leq \lambda_{M,B,D} \leq U(B)] \geq 1-err$. If we let $\lambda_{M,B}$ denote the probability that a random user password (sampled from the underlying password distribution) would be cracked within $B$ guesses using model $M$ (i.e. the population guessing curve), we can lower/upper bound $\lambda_{M,B}$ with similar techniques.  
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+### Goals
+
+1. **Bounding Guessing Numbers**: given a password and an error rate, lower/upper bound the number of guesses it would take for a password model to crack the password.
+2. **Bounding Guessing Curves**: given a password dataset and an error rate, lower/upper bound the fraction of passwords that will be cracked in the dataset (or in the population from which the dataset is sampled) for different guessing budgets.
+
+### Assumptions
+
+The statistical techniques presented apply **only if** the password model of interest are able to perform the following actions accurately and efficiently
+
+1. Draw a sample from the model (i.e. sample from the underlying distribution)
+2. Given a password, determine its probability of being generated by the model
+
+> Neural Networks, Probabilistic Context Free Grammar, and Markov Models are examples that satisfy these assumptions. On the other hand, heuristic tools such as Hashcat and John the Ripper do not satisfy the assumptions.
+
+other assumptions:
+
+- the passwords in the dataset must be *iid* samples from some (unknown) password distribution. This assumption is only required when we want to lower/upper bound the population guessing curve $\lambda_{M,B}$.
+
+## Files
+
+### Required Files
+
+- `model.py`: an abstract class for password models
+- `cmc.py`: implements the main functionalities of Confident Monte Carlo
+
+### Complementary Files
+
+- `io.py`: helper functions to manipulate password files.
+- `password_guessing_model.py`: examples of common password models for demonstration.
+- `models/`: PCFG and N-gram models used in [the paper](Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf) (source: [https://github.com/matteodellamico/montecarlopwd](https://github.com/matteodellamico/montecarlopwd), last commit in August 2017).
+- `transformer/`: the transformer password model as described in [the paper](Rigorous_Analysis_of_Guessing_Curves_for_Password_Cracking_Models.pdf).
+- `examples/`: provides guidance for using the interface.
+
+> If the user decides to specify their own password models, the only files needed are `cmc.py` and `model.py`. If the user wants to experiment with the models provided in the repository, please note that there might be issues with the import statements in some files. If that occurs, the user can modify the import statements according to the file structure they choose.
+
+## Model Specification
+
+The user should specify a password guessing model that inherits the abstract class `Model` in the file [`model.py`](model.py) and overrides two abstract methods:
+- `generate()` : sample from the model and returns `(password, logprob)`, the sampled password and the log probability of it being generated by the model.
+- `logprob(pwd)` : given a password `pwd`, return the log probability of it being generated by the model.
+
+> Note: all log probabilities should be in log base 2
+
+[password_guessing_model.py](password_guessing_model.py) contains some simple models for users to experiment with. It also provides an interface for models specified in the models and transformer directories:
+
+- [models](models) contains implementation of the PCFG and N-gram models obtained from [this repository](https://github.com/matteodellamico/montecarlopwd) as stated in the paper. The user can directly use the classes specified in `password_guessing_model.py` (see [examples](examples) for guidance) to work with the models.
+- [transformer](transformer) contains implementation of a transformer neural network as described in the paper. Use [train.py](transformer/train.py) to train a transformer model and store the model in a file, then use the interface specified in `password_guessing_model.py` to create the `ConfidentMonteCarlo` object.
+
+> For the transformer to run properly, please move the files `cmc.py`, `model.py`, `password_guessing_model.py` to the same directory containing the transformer files, and manually update the import statements.
+
+## Creating a `ConfidentMonteCarlo` object
+
+The user can access the tools for analyzing the model via a `ConfidentMonteCarlo` object (located in [cmc.py](cmc.py)). When instantiating the object, the user **must** specify the password guessing model to be analyzed. The user can also optionally include a **password dataset file** and a **password composition policy** to be enforced, both of which can be set and/or changed later with methods `parse_file()` and `set_policy()` as one might want to experiment with different datasets and policies. However, each instance of the `ConfidentMonteCarlo` class is tied to a password model.
+
+> Note: 
+> 1. The dataset should be in csv format with columns `pwd` and `freq`, representing unique passwords and their frequency in the dataset, with `\t` as the delimiter. To generate such csv files from plaintext files, one can utilize functions in `io.py`.
+> 2. The policy should be a callable object that takes a string (password) as the argument and returns `True` (allowed by policy) or `False` (not allowed by policy).
+
+After creating the ConfidentMonteCarlo object `cmc`, the user has the choice between a [simple interface](#the-simple-interface) that automatically selects parameters and provides a quick summary **or** a set of [advanced methods](#advanced-tools) that allows full control of the parameters for the user to perform customized experiments. **Please also see** [examples](examples) **for better guidance!!!**
+
+## The Simple Interface
+
+> The methods here are designed to be straightfoward for people who want to use the ConfidentMonteCarlo tool without delving into too many technical details. The methods below use default parameters which should work well in most settings. For those who wish to optimize parameters (sample size, mesh points, error partitions, etc...) to obtain better results for a particular password model or dataset please see [this section](#advanced-tools).
+
+### Bounding Guessing Numbers of Individual Passwords
+- `guessing_number_bound(pwd, err)`: given a password `pwd` and an error rate `err`, outputs a lower bound $L$ and an upper bound $U$ for the guessing number $G$ of this password. The guarantee is that, except with probability `err`, the true guessing number $G$ for the password `pwd` lies between $L$ and $U$ i.e., $\Pr[L \leq G \leq U] \geq 1-err$. The interval $[L, U]$ is returned in the form `Tuple[int, int]`.
+- `guessing_number_bound(q, err)`: given a log probability `q` and an error rate `err`, outputs a lower bound $L$ and an upper bound $U$ for the guessing number $G$ for any password $pwd$ with log probability `q` given by the model. The guarantee is that, except with probability `err`, the true guessing number $G$ lies between $L$ and $U$ i.e., $\Pr[L \leq G \leq U] \geq 1 - err$. The interval $[L, U]$ is returned in the form `Tuple[int, int]`.
+- `guessing_number_plot(err, title, file)`: given an error rate `err` and a chart name `title` and output filename `file`, generates a plot of guessing number upper and lower bounds vs. log probability of passwords and saves the image to the `file` (see [example](examples/guessing_number_bound.png)). The data used to generate the plots (`logprobs, lbs, ubs`) are returned in the format `Tuple[List[float], List[int], List[int]]`.
+
+> The bounds are given by **Theorems 1 and 2**.
+
+### Bounding Guessing Curves of Passwords Models
+
+If the user chooses to specify a password dataset for the ConfidentMonteCarlo object then the following methods are available for bounding the dataset/population guessing curves. Our statistical techniques generate a lower bound $lb1$ and three upper bounds $ub1$, $ub2$, and $ub3$. When bounding guessing curves for a specific budget $B$ with `bound()`, the program will automatically select the best bound. When plotting the entire guessing curve with `plot()`, the program will draw all four bounds.
+
+- `dataset_guessing_curve_bound(B, err)`: given a guessing number `B` and an error rate `err`, lower/upper bounds the percentage of passwords that will be cracked within `B` guesses in the dataset. Spefically, the function outputs a lower bound $L$ and an upper bound $U$. The guarantee is that $\Pr[L \leq \lambda_{M,B,D} \leq U] \geq 1-err$ where $\lambda_{M,B,D}$ denotes the fraction of passwords in our dataset D that would be cracked within $B$ guesses if the attacker uses our model $M$ to crack passwords. The result $(L, U)$ is returned in the form `Tuple[float, float]`.
+- `population_guessing_curve_bound(B, err)`: given a guessing number `B` and an error rate `err`, lower/upper bounds the percentage of passwords that will be cracked within `B` guesses in the population from which the dataset is sampled. Spefically, the function outputs a lower bound $L$ and an upper bound $U$. The guarantee is that $\Pr[L \leq \lambda_{M,B} \leq U] \geq 1-err$ where $\lambda_{M,B}$ denotes the fraction of passwords in the population that would be cracked within $B$ guesses if the attacker uses our model $M$ to crack passwords. The result $(L, U)$ is returned in the form `Tuple[float, float]`.
+- `dataset_guessing_curve_plot(err, title, file)`: given an error rate `err`, chart name `title` and output filename `file` (defaults to 'dataset_guessing_curve.png'), generates a plot of the 4 bounds versus the guessing budget $B$ and saves the image to `file`. The guarantee is that $\Pr[\forall B. \lambda_{M,B,D} \geq lb] \geq 1 - err$ for the lower bound and $\Pr[\forall B. \lambda_{M,B,D} \leq ub] \geq 1 - err$ for the three upper bounds. The data that generates the staircase plots (see [matplotlib documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.stairs.html)) `(values, edges)` are returned in the form `Dict[str, Tuple[List[float], List[float]]]` where the keys of the dictionary are 'lb1', 'ub1', 'ub2', or 'ub3' and the corresponding tuples contain the data.
+- `population_guessing_curve_plot(err, title, file)`: given an error rate `err`, chart name `title` and output filename `file` (defaults to 'population_guessing_curve.png'), generates a plot of the 4 bounds versus the guessing budget $B$ and saves the image to `file`. The guarantee is that $\Pr[\forall B. \lambda_{M,B} \geq lb] \geq 1 - err$ for the lower bound and $\Pr[\forall B.n\lambda_{M,B} \leq ub] \geq 1 - err$ for the three upper bounds. The data that generates the staircase plots (see [matplotlib documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.stairs.html)) `(values, edges)` are returned in the form `Dict[str, Tuple[List[float], List[float]]]` where the keys of the dictionary are 'lb1', 'ub1', 'ub2', or 'ub3' and the corresponding tuples contain the data.
+
+The bounds hold except with probability `err` (or `err1 + err2` in the population case) by **Theorems 12, 13, and 14** and **Theorems 6, 7, and 8** respectively.
+
+> **Notes**:
+> 1. The user only needs to specify `q` and `B` in the methods. Other parameters are optional (has predetermined values).
+> 2. The running times of the first call to methods might be longer since the program has to draw samples and perform precomputation. Subsequent calls during the same session should execute much faster.
+
+## Advanced Tools
+
+### Drawing samples from the model
+
+The statistical techniques rely on samples from the password model. Therefore, after creating the ConfidentMonteCarlo object `cmc`, the user must draw samples from the model before proceeding to the next step. There are two bounds presented in the paper. The first bound (applying *Hoeffding's Inequality*) requires a set of `k1` iid samples, and the second bound (applying *Markov's Inequality*) requires `n` sets of `k2` iid samples, where `k1`, `n`, and `k1` are adjustable parameters depending on the user's desired error rate and running time. The following methods are available for drawing samples from the model:
+
+- `cmc.sample(k1)`: draws `k1` samples from the model.
+- `cmc.group_sample(n)`: splits the `k1` samples drawn with `cmc.sample(k1)` into n equally sized groups (remaining samples are discarded), `n` is defaulted to be $\sqrt{k_1}$.
+- `cmc.n_sample(n, k2)`: draws `n` sets of `k2` samples (`n * k2` in total) from the model. 
+- `cmc.write_sample(file)`: writes the drawn sample to a file with columns `pwd`, `logprob`, and `freq` (this might be useful if sampling from the model takes a long time so one might store the samples drawn to repeat the experiment with different parameters or across different sessions to avoid having to draw new samples every time).
+- `cmc.read_sample(file)`: reads a set of samples from a csv file. The file should be in the exact format as what `write_sample()` produced as the assumption is that the user calls this method with the file created by `write_sample()`.
+
+> When grouping samples (or sampling n sets), in general, it is recommended that the user chooses `n` and `k2` values such that they are about the same. Experiments have shown that as the probability goes smaller, the optimal `k2` value for the best lower bound increases. However, as long as `n` and `k2` stay relatively close, there weren't a significant difference among the lower bounds.
+
+### Bounding Guessing Numbers of Individual Passwords
+
+> ##### Exclusive and Inclusive Bounds
+>
+> An attacker following a model would order the password by their probabilities and makes guesses one by one starting from the one with the largest probability. Therefore, the guessing number of a password would be the number of passwords that have a larger probability than it. However, if there are multiple passwords with the same probability, there will be multiple possible values for the guessing number. To avoid ambiguity, for a probability `q` we define the **exclusive bound** $G^{EX}(q)$ to be the number of passwords with probability *strictly greater* than `q`, and the **inclusive bound** $G^{IN}(q)$ to be the number of passwords with probability *greater than or equal to* `q`. Intuitively, among a sequence of passwords with the exact same probability, the **exclusive bound** assumes that we guess a password first, and the **inclusive bound** assumes that we guess a password last.
+
+After drawing samples, the following methods are available for bounding the guessing number for individual passwords. Given a log probability `q` of a password and an error rate `err`:
+
+- `cmc.hoeffding_bound_EX(q, err)`: outputs a lower bound $L$ and an upper bound $U$ for the exclusive guessing number $G^{EX}(q)$. The guarantee is that $\Pr[G^{EX}(q) \leq U] \geq 1 - err$ and $\Pr[G^{EX}(q) \geq L] \geq 1 - err$. The result $[L, U]$ is returned in the form `Tuple[int, int]`.
+- `cmc.hoeffding_bound_IN(q, err)`: outputs a lower bound $L$ and an upper bound $U$ for the inclusive guessing number $G^{IN}(q)$. The guarantee is that $\Pr[G^{IN}(q) \leq U] \geq 1 - err$ and $\Pr[G^{IN}(q) \geq L] \geq 1 - err$. The result $[L, U]$ is returned in the form `Tuple[int, int]`.
+- `cmc.markov_lowerbound_EX(q, err)`: outputs a lower bound $L$ for the exclusive guessing number. The guarantee is that $\Pr[G^{EX}(q) \geq L] \geq 1 - err$. The result is returned as an `int`.
+- `cmc.markov_lowerbound_IN(q, err)`: outputs a lower bound $L$ for the inclusive guessing number. The guarantee is that $\Pr[G^{IN}(q) \geq L] \geq 1 - err$. The result is returned as an `int`.
+
+The bounds are given by **Theorems 1 and 2**.
+
+### Bounding Guessing Curves of Passwords Models
+
+If the user chooses to specify a password dataset, the following methods are available for bounding the dataset/population guessing curves (i.e. $\lambda_{M,B,D}$ and $\lambda_{M,B}$).
+
+#### Generating Probability Mesh Points
+
+The class `MeshPointGenerator` located in [cmc.py](cmc.py) contains two helpers that generate high quality mesh points for bounding the guessing curves, though one can definitely try specifying their own mesh points. For an object `mpg = MeshPointGenerator()`:
+
+- `mpg.even_range(low, high, num, scale)` generates `num` evenly distributed mesh points between `low` and `high`, in either log scale or normal scale (log scale performs much better in practice).
+- `mpg.from_sample(sample, num, stop)` takes a sample from the model `sample` and returns `num` evenly spread out percentiles of the log probabilities sampled from the model. The optional `stop` parameter specifies that the method would discard any log probabilities lower than `stop` to prevent a rare sample from skewing the mesh points.
+
+#### Structure
+
+The guessing curve of a model describes the relationship between the guessing number and the percentage of passwords that will be cracked in either the dataset or the population from which the dataset is sampled. The paper presents 4 bounds (1 lower bound and 3 upper bounds) for the guessing curve, denoted as `lb1`, `ub1`, `ub2`, and `ub3`. `lb1` and `ub1` are obtained by utilizing the bounds on the guessing numbers derived with *Hoeffding's Inequality*, `ub2` is obtained by utilizing the lower bound on guessing numbers derived with *Markov's Inequality*, and `ub3` is a trivial upper bound obtained by filtering out impossible passwords.
+
+There are 3 types of methods available for working with guessing curves:
+
+- `fit()` takes a set of mesh points and error rate(s), then performs necessary precomputation to prepare for `query()` and `plot()`.
+- `query()` takes a guessing number and bounds the percentage of passwords that will be cracked.
+- `plot()` generates the plot of a guessing curve such as [this figure](examples/pcfg_v_4gram.png).
+
+> One must always call `fit()` before calling `query()` and `plot()`.
+
+#### Guessing Curve on the dataset
+
+- `cmc.dataset_curve_bound1_fit(mesh, err)`: fits `lb1` and `ub1` with mesh points `mesh` and error rate `err`.
+- `cmc.dataset_curve_bound2_fit(mesh, err)`: fits `ub2` with mesh points `mesh` and error rate `err`.
+- `cmc.dataset_curve_bound3_fit(err)`: fits `ub3` with error rate `err`.
+- `cmc.dataset_curve_bound_fit(mesh, err)`: for convenience, fits all three bounds with the same mesh points and error rate.
+- `cmc.dataset_curve_bound1_query(B)`: outputs `lb1` and `ub1` for the percentage of passwords in the dataset that will be cracked within `B` guesses (i.e. $\lambda_{M,B,D}$ where $M$ is the model and $D$ is the dataset associated with the `cmc` object). The guarantee is that $\Pr[\lambda_{M,B,D} \geq lb1] \geq 1 - err$ and $\Pr[\lambda_{M,B,D} \leq ub1] \geq 1 - err$ where $err$ is specified in the corresponding `fit()` call. The bound `(lb1, ub1)` is returned in the form `Tuple[float, float]`.
+- `cmc.dataset_curve_bound2_query(B)`: outputs `ub2` for the percentage of passwords in the dataset that will be cracked within `B` guesses (i.e. $\lambda_{M,B,D}$ where $M$ is the model and $D$ is the dataset associated with the `cmc` object). The guarantee is that $\Pr[\lambda_{M,B,D} \leq ub2] \geq 1 - err$ where $err$ is specified in the corresponding `fit()` call. The bound `ub2` is returned as a `float`.
+- `cmc.dataset_curve_bound3_query(B)`: outputs `ub3` for the percentage of passwords in the dataset that will be cracked within `B` guesses (i.e. $\lambda_{M,B,D}$ where $M$ is the model and $D$ is the dataset associated with the `cmc` object). The guarantee is that $\Pr[\lambda_{M,B,D} \leq ub3] = 1$. The bound `ub3` is returned as a `float`.
+- `cmc.dataset_curve_bound_query(B)`: for convenience, returns all 4 bounds for the percentage of passwords in the dataset that would be cracked within `B` guesses. The bounds `(lb1, ub1, ub2, ub3)` are returned in the form `Tuple[float, float, float, float]`.
+- `cmc.dataset_curve_bound_plot(bounds, show, file, title)`: given output filename `file` and chart name `title`, plots the guessing curves specified in `bounds` (`bounds` should be a list containing 'lb1', 'ub1', 'ub2', and/or 'ub3', contains all by default), optionally displays (if `show` is True) and/or saves (if `file` is not an empty string) the plot, and returns the values that generate the stair case plots for the user to plot more complicated/customized plots such as [this figure](examples/pcfg_v_4gram.png) that compares the curves of two models. The data that generates the staircase plots (see [matplotlib documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.stairs.html)) `(values, edges)` are returned in the form `Dict[str, Tuple[List[float], List[float]]]` where the keys of the dictionary are 'lb1', 'ub1', 'ub2', or 'ub3' and the corresponding tuples contain the data.
+
+The bounds are given by **Theorems 12, 13, and 14**.
+
+#### Guessing Curve on the population
+
+The methods for bounding the population guessing curve are mostly the same as the ones above, with an extra error term `err2` introduced to account for the randomness of sampling the dataset from the population (recall that the assumption was that the dataset contains *iid* samples from the password distribution).
+
+- `cmc.population_curve_bound1_fit(mesh, err1, err2)`: fits `lb1` and `ub1` with mesh points `mesh` and error rates `err1` and `err2`.
+- `cmc.population_curve_bound2_fit(mesh, err1, err2)`: fits `ub2` with mesh points `mesh` and error rate `err1` and `err2`.
+- `cmc.population_curve_bound3_fit(err1, err2)`: fits `ub3` with error rate `err1` and `err2`.
+- `cmc.population_curve_bound_fit(mesh, err1, err2)`: for convenience, fits all three bounds with the same mesh points and error rates.
+- `cmc.population_curve_bound1_query(B)`: outputs `lb1` and `ub1` for the percentage of passwords in the population that will be cracked within `B` guesses (i.e. $\lambda_{M,B}$ where $M$ is the model associated with the `cmc` object). The guarantee is that $\Pr[\lambda_{M,B} \geq lb1] \geq 1 - err1 - err2$ and $\Pr[\lambda_{M,B} \leq ub1] \geq 1 - err1 - err2$ where $err1$ and $err2$ are specified in the corresponding `fit()` call. The bound `(lb1, ub1)` is returned in the form `Tuple[float, float]`.
+- `cmc.population_curve_bound2_query(B)`: outputs `ub2` for the percentage of passwords in the population that will be cracked within `B` guesses (i.e. $\lambda_{M,B}$ where $M$ is the model associated with the `cmc` object). The guarantee is that $\Pr[\lambda_{M,B} \leq ub2] \geq 1 - err1 - err2$ where $err1$ and $err2$ are specified in the corresponding `fit()` call. The bound `ub2` is returned as a `float`.
+- `cmc.population_curve_bound3_query(B)`: outputs `ub3` for the percentage of passwords in the population that will be cracked within `B` guesses (i.e. $\lambda_{M,B}$ where $M$ is the model associated with the `cmc` object). The guarantee is that $\Pr[\lambda_{M,B} \leq ub3] \geq 1 - err$ where $err$ is specified in the coresponding `fit()` call. The bound `ub3` is returned as a `float`.
+- `cmc.population_curve_bound_query(B)`: for convenience, returns all 4 bounds for the percentage of passwords in the population that would be cracked within `B` guesses. The bounds `(lb1, ub1, ub2, ub3)` are returned in the form `Tuple[float, float, float, float]`.
+- `cmc.population_curve_bound_plot(bounds, show, file, title)`: given output filename `file` and chart name `title`, plots the guessing curves specified in `bounds` (`bounds` should be a list containing 'lb1', 'ub1', 'ub2', and/or 'ub3', contains all by default), optionally displays (if `show` is True) and/or saves (if `file` is not an empty string) the plot, and returns the values that generate the stair case plots for the user to plot more complicated/customized plots such as [this figure](examples/pcfg_v_4gram.png) that compares the curves of two models. The data that generates the staircase plots (see [matplotlib documentation](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.stairs.html)) `(values, edges)` are returned in the form `Dict[str, Tuple[List[float], List[float]]]` where the keys of the dictionary are 'lb1', 'ub1', 'ub2', or 'ub3' and the corresponding tuples contain the data.
+
+The bounds are given by **Theorems 6, 7, and 8**.
+
